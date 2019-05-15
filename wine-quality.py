@@ -1,11 +1,16 @@
 from tensorflow import keras
 from sklearn.model_selection import cross_val_score, KFold
-from tensorflow.keras.wrappers.scikit_learn import KerasRegressor
-from tensorflow.keras.layers import Dense, Dropout
-from tensorflow.keras.models import Sequential
+from keras.wrappers.scikit_learn import KerasRegressor
+from keras.layers import Dense, Dropout
+from keras.models import Sequential
 from sklearn.metrics import accuracy_score
+from sklearn.preprocessing import StandardScaler
 import pandas as pd
 import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.svm import SVR
 
 feature_names = [
     "fixed acidity",
@@ -24,26 +29,46 @@ feature_names = [
 
 red_wine_data = pd.read_csv('winequality-red.csv',
                             names=feature_names, sep=";", header=1)
-print(red_wine_data.head())
-print(red_wine_data.describe())
+white_wine_data = pd.read_csv(
+    'winequality-white.csv', names=feature_names, sep=";", header=1)
 
-red_wine_features = red_wine_data[feature_names].drop('quality', axis=1).values
-red_wine_quality = red_wine_data['quality'].values
+wine_data = red_wine_data.append(white_wine_data)
+wine_features = wine_data[feature_names].drop('quality', axis=1).values
+wine_quality = wine_data['quality'].values
+
+scaler = StandardScaler().fit(wine_features)
+wine_features_scaled = scaler.transform(wine_features)
 
 
-def create_model():
+def base_model():
     model = Sequential()
-    model.add(Dense(16, input_dim=11,
+    model.add(Dense(1024, input_dim=11,
                     kernel_initializer='normal', activation='relu'))
-    model.add(Dense(8, kernel_initializer='normal', activation='relu'))
-    model.add(Dense(4, kernel_initializer='normal', activation='relu'))
-    model.add(Dense(1, activation='linear'))
-    model.compile(loss='mse', optimizer='adam', metrics=['accuracy'])
+    model.add(Dropout(0.2))
+    model.add(Dense(256, kernel_initializer='normal', activation='relu'))
+    model.add(Dropout(0.2))
+    model.add(Dense(128, kernel_initializer='normal', activation='relu'))
+    model.add(Dropout(0.2))
+    model.add(Dense(64, kernel_initializer='normal', activation='relu'))
+    model.add(Dropout(0.2))
+    model.add(Dense(16, kernel_initializer='normal', activation='relu'))
+    model.add(Dropout(0.2))
+    model.add(Dense(1))
+    model.compile(loss='mse', optimizer='adam', metrics=['mae'])
     return model
 
 
-estimator = KerasRegressor(build_fn=create_model, nb_epoch=100, verbose=0)
-estimator.fit(red_wine_features, red_wine_quality)
-prediction = estimator.predict(red_wine_features)
-train_error = np.abs(red_wine_quality - prediction)
-print(np.mean(train_error))
+models = []
+estimator = KerasRegressor(build_fn=base_model,
+                           nb_epoch=50, verbose=0)
+models.append(('NeuralNet', estimator))
+models.append(('DecisionTree', DecisionTreeRegressor()))
+models.append(('RandomForest', RandomForestRegressor(n_estimators=100)))
+models.append(('GradienBoost', GradientBoostingRegressor()))
+models.append(('SVR', SVR(gamma='auto')))
+
+for name, model in models:
+    kfold = KFold(n_splits=5, random_state=43)
+    results = np.sqrt(-1 * cross_val_score(model, wine_features_scaled,
+                                           wine_quality, scoring='neg_mean_squared_error', cv=kfold))
+    print("{}: {}".format(name, results.mean()))

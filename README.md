@@ -8,8 +8,8 @@ Since each dataset comes with 12 features, not all are correlated with the type 
 
 ![correlation matrix](wine_data_cm.png)
 
-- volatile acidity
-- total sulfur dioxide
-- fixed acidity
-- chlorides
-- free sulfur dioxide
+The following features can be excluded as they have small correlation with wine type:
+- citric acid
+- pH
+- alcohol
+- quality
